@@ -188,7 +188,7 @@ def calculate_vals(df, selected_year=None):
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/1018/1018663.png", width=60)
     st.title("CricValue")
-    st.caption("v9.1 | Value Edition")
+    st.caption("v9.2 | Mega Hero")
     st.markdown("---")
     
     df_main = load_data_smart()
@@ -216,8 +216,8 @@ if team_filter:
 
 # 7. UI RENDER
 if mode == "Projected Market Value":
-    # --- UPDATED HEADER HERE ---
-    st.subheader(f"💰 2025 Mega Auction Value")
+    # --- FIXED HEADER ---
+    st.subheader("Mega Hero") 
 else:
     st.subheader(f"🗓️ Season Analysis: {selected_year}")
 
@@ -228,22 +228,23 @@ if not vals.empty:
     
     def render_card(col, p, medal, color):
         logo = get_team_logo(p['Team_Code'])
+        
+        # --- FIXED HTML FORMATTING (Removed extra indentations) ---
+        html_code = f"""
+<div class="hero-card" style="border-top: 5px solid {color};">
+    <div style="font-size: 2.5rem;">{medal}</div>
+    <div class="player-name">{p['Player']}</div>
+    <div style="display:flex; justify-content:center; align-items:center; gap:8px;">
+        <img src="{logo}" width="30" height="30" onerror="this.style.display='none'">
+        <span style="color:#aaa;">{p['Team_Code']}</span>
+    </div>
+    <div class="value-label">Value</div>
+    <div class="price-tag">₹ {p['Market_Value']:.2f} Cr</div>
+    <div class="role-badge">{p['Role']}</div>
+</div>
+"""
         with col:
-            st.markdown(f"""
-            <div class="hero-card" style="border-top: 5px solid {color};">
-                <div style="font-size: 2.5rem;">{medal}</div>
-                <div class="player-name">{p['Player']}</div>
-                <div style="display:flex; justify-content:center; align-items:center; gap:8px;">
-                    <img src="{logo}" width="30" height="30" onerror="this.style.display='none'">
-                    <span style="color:#aaa;">{p['Team_Code']}</span>
-                </div>
-                
-                <div class="value-label">Value</div>
-                <div class="price-tag">₹ {p['Market_Value']:.2f} Cr</div>
-                
-                <div class="role-badge">{p['Role']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(html_code, unsafe_allow_html=True)
 
     if len(top_3) > 1: render_card(col1, top_3.iloc[1], "🥈", "#C0C0C0")
     if len(top_3) > 0: render_card(col2, top_3.iloc[0], "👑", "#FFD700")
