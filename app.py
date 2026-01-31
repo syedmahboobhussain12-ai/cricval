@@ -4,7 +4,6 @@ import altair as alt
 import base64
 import os
 import numpy as np
-import glob  # <--- Added this to hunt for files
 
 # 1. PAGE CONFIG & CSS
 st.set_page_config(page_title="CricValue | Pro Edition", layout="wide", page_icon="🏏")
@@ -12,10 +11,25 @@ st.set_page_config(page_title="CricValue | Pro Edition", layout="wide", page_ico
 st.markdown("""
 <style>
     .stApp { background-color: #0E1117; }
-    .hero-card { background: linear-gradient(145deg, #1e2130, #161822); border-radius: 20px; padding: 20px; text-align: center; border: 1px solid #444; box-shadow: 0 10px 20px rgba(0,0,0,0.4); margin-bottom: 20px; }
-    .player-name { color: white; margin: 10px 0; font-size: 1.5rem; font-weight: 700; }
-    .price-tag { color: #4CAF50; font-weight: 900; margin: 10px 0; font-size: 2rem; }
-    .role-badge { background-color: #333; color: #ccc; padding: 5px 15px; border-radius: 15px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+    
+    /* Hero Card Styling */
+    .hero-card {
+        background: linear-gradient(145deg, #1e2130, #161822);
+        border-radius: 20px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #444;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+        margin-bottom: 20px;
+    }
+    
+    /* Typography */
+    .player-name { color: white; margin: 5px 0; font-size: 1.6rem; font-weight: 700; }
+    .value-label { color: #888; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; margin-top: 15px; }
+    .price-tag { color: #4CAF50; font-weight: 900; font-size: 2.2rem; line-height: 1; }
+    .role-badge { background-color: #333; color: #ccc; padding: 5px 15px; border-radius: 15px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; display: inline-block; }
+    
+    /* Stat Box */
     .stat-box { background-color: #1a1c24; padding: 15px; border-radius: 10px; border: 1px solid #333; text-align: center; }
     .stat-label { color: #888; font-size: 0.9rem; }
     .stat-val { color: #fff; font-size: 1.4rem; font-weight: bold; }
@@ -52,16 +66,15 @@ def get_team_logo(team_code):
     if local_logo: return local_logo
     return ONLINE_LOGOS.get(team_code, ONLINE_LOGOS['Free Agent'])
 
-# 3. SMART FILE HUNTER (The Fix)
+# 3. SMART FILE HUNTER
 @st.cache_data
 def load_data_smart():
-    # 1. Print Debug Info
+    # 1. Hunt for ANY .zip or .csv file
     files_present = []
     for root, dirs, files in os.walk("."):
         for filename in files:
             files_present.append(os.path.join(root, filename))
     
-    # 2. Hunt for ANY .zip or .csv file
     target_file = None
     file_type = None
     
@@ -82,7 +95,6 @@ def load_data_smart():
     
     if not target_file:
         st.error(f"❌ CRITICAL ERROR: Could not find 'data.zip' or the CSV file anywhere.")
-        st.write("📂 Here are the files I found on the server:", files_present)
         return pd.DataFrame()
 
     try:
@@ -103,7 +115,6 @@ def load_data_smart():
 def calculate_vals(df, selected_year=None):
     if df.empty: return pd.DataFrame()
 
-    # Mode Selection
     if selected_year:
         df_subset = df[df['year'] == selected_year]
         latest_year = selected_year
@@ -113,7 +124,6 @@ def calculate_vals(df, selected_year=None):
 
     if df_subset.empty: return pd.DataFrame()
 
-    # Metadata
     df_sorted = df.sort_values('date')
     last_team_bat = df_sorted.groupby('batter')['batting_team'].last()
     last_team_bowl = df_sorted.groupby('bowler')['bowling_team'].last()
@@ -124,26 +134,22 @@ def calculate_vals(df, selected_year=None):
         df.groupby('bowler')['year'].max()
     ]).groupby(level=0).max()
 
-    # Availability
     matches = df_subset.groupby(['year', 'batter'])['match_id'].nunique().reset_index()
     max_matches = df_subset.groupby('year')['match_id'].nunique().max()
     availability = matches.groupby('batter')['match_id'].mean().reset_index()
     availability.columns = ['Player', 'avg_matches']
     availability['avail_score'] = (availability['avg_matches'] / max_matches).clip(upper=1.0)
 
-    # Batting
     bat = df_subset.groupby('batter').agg(runs=('runs_off_bat', 'sum'), balls=('ball', 'count')).reset_index()
     bat.columns = ['Player', 'bat_runs', 'bat_balls'] 
     bat['sr'] = (bat['bat_runs'] / bat['bat_balls'].replace(0, 1)) * 100
     bat['bat_points'] = bat['bat_runs'] * ((bat['sr']/100)**2) / 1.25
 
-    # Bowling
     bowl = df_subset.groupby('bowler').agg(wkts=('is_wicket', 'sum'), runs=('total_runs', 'sum'), balls=('ball', 'count')).reset_index()
     bowl.columns = ['Player', 'bowl_wkts', 'bowl_runs', 'bowl_balls']
     bowl['eco'] = (bowl['bowl_runs'] / bowl['bowl_balls'].replace(0, 1)) * 6
     bowl['bowl_points'] = bowl.apply(lambda x: (x['bowl_wkts'] * ((9.0/max(4, x['eco']))**2) * 35) if x['bowl_wkts'] > 0 else 0, axis=1)
 
-    # Merge
     merged = pd.merge(bat, bowl, on='Player', how='outer').fillna(0)
     merged = pd.merge(merged, availability, on='Player', how='left').fillna(0)
     merged['Team'] = merged['Player'].map(last_team).fillna("Free Agent")
@@ -152,7 +158,6 @@ def calculate_vals(df, selected_year=None):
     if not selected_year:
         merged['avail_score'] = np.where(merged['last_active'] < latest_year, 0, merged['avail_score'])
     
-    # Points & Pricing
     merged['perf_points'] = merged.apply(lambda x: max(x['bat_points'], x['bowl_points']) + (min(x['bat_points'], x['bowl_points']) * 0.4), axis=1)
     merged['adjusted_score'] = merged['perf_points'] * (1 + (merged['avail_score'] * 0.10))
     merged['rank'] = merged['adjusted_score'].rank(ascending=False)
@@ -184,10 +189,9 @@ def calculate_vals(df, selected_year=None):
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/1018/1018663.png", width=60)
     st.title("CricValue")
-    st.caption("v8.0 | Auto-File Hunter")
+    st.caption("v9.0 | Value Edition")
     st.markdown("---")
     
-    # LOAD DATA FIRST
     df_main = load_data_smart()
     
     mode = st.radio("📊 Analysis Mode", ["Projected Market Value", "Historical Season"])
@@ -203,11 +207,10 @@ with st.sidebar:
 
 # 6. RUN ENGINE
 if df_main.empty:
-    st.stop() # Error message already handled in load_data_smart
+    st.stop()
 
 vals = calculate_vals(df_main, selected_year)
 
-# Filter
 vals = vals[vals['Role'].isin(role_filter)]
 if team_filter:
     vals = vals[vals['Team_Code'].isin(team_filter)]
@@ -234,7 +237,10 @@ if not vals.empty:
                     <img src="{logo}" width="30" height="30" onerror="this.style.display='none'">
                     <span style="color:#aaa;">{p['Team_Code']}</span>
                 </div>
+                
+                <div class="value-label">Value</div>
                 <div class="price-tag">₹ {p['Market_Value']:.2f} Cr</div>
+                
                 <div class="role-badge">{p['Role']}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -256,7 +262,7 @@ with tab1:
         column_config={
             "Team_Logo": st.column_config.ImageColumn("Team", width="small"),
             "Player": st.column_config.TextColumn("Name", width="medium"),
-            "Market_Value": st.column_config.NumberColumn("Price", format="₹ %.2f Cr"),
+            "Market_Value": st.column_config.NumberColumn("Value", format="₹ %.2f Cr"), # Renamed Header
             "bat_points": st.column_config.ProgressColumn("Batting", format="%.0f", min_value=0, max_value=vals['bat_points'].max()),
             "bowl_points": st.column_config.ProgressColumn("Bowling", format="%.0f", min_value=0, max_value=vals['bowl_points'].max()),
             "sr": st.column_config.NumberColumn("SR", format="%.1f"),
