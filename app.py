@@ -69,7 +69,6 @@ def get_team_logo(team_code):
 # 3. SMART FILE HUNTER
 @st.cache_data
 def load_data_smart():
-    # 1. Hunt for ANY .zip or .csv file
     files_present = []
     for root, dirs, files in os.walk("."):
         for filename in files:
@@ -189,7 +188,7 @@ def calculate_vals(df, selected_year=None):
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/1018/1018663.png", width=60)
     st.title("CricValue")
-    st.caption("v9.0 | Value Edition")
+    st.caption("v9.1 | Value Edition")
     st.markdown("---")
     
     df_main = load_data_smart()
@@ -217,7 +216,8 @@ if team_filter:
 
 # 7. UI RENDER
 if mode == "Projected Market Value":
-    st.subheader(f"💰 2025 Mega Auction Projections")
+    # --- UPDATED HEADER HERE ---
+    st.subheader(f"💰 2025 Mega Auction Value")
 else:
     st.subheader(f"🗓️ Season Analysis: {selected_year}")
 
@@ -262,7 +262,7 @@ with tab1:
         column_config={
             "Team_Logo": st.column_config.ImageColumn("Team", width="small"),
             "Player": st.column_config.TextColumn("Name", width="medium"),
-            "Market_Value": st.column_config.NumberColumn("Value", format="₹ %.2f Cr"), # Renamed Header
+            "Market_Value": st.column_config.NumberColumn("Value", format="₹ %.2f Cr"),
             "bat_points": st.column_config.ProgressColumn("Batting", format="%.0f", min_value=0, max_value=vals['bat_points'].max()),
             "bowl_points": st.column_config.ProgressColumn("Bowling", format="%.0f", min_value=0, max_value=vals['bowl_points'].max()),
             "sr": st.column_config.NumberColumn("SR", format="%.1f"),
