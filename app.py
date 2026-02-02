@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -15,7 +16,7 @@ st.set_page_config(
 )
 
 # -------------------------------------------------
-# STYLES (UPDATED FOR SWIPE/SNAP)
+# STYLES (SWIPE CARDS)
 # -------------------------------------------------
 st.markdown("""
 <style>
@@ -28,29 +29,18 @@ st.markdown("""
     overflow-x: auto;
     gap: 20px;
     padding: 20px 0 40px 0;
-    
-    /* This creates the "Swipe/Snap" effect */
     scroll-snap-type: x mandatory; 
     scroll-behavior: smooth;
-    
-    /* Hide Scrollbar for cleaner UI */
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE/Edge */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
-
-/* Hide Scrollbar for Chrome/Safari */
-.hero-scroll::-webkit-scrollbar {
-    display: none;
-}
+.hero-scroll::-webkit-scrollbar { display: none; }
 
 /* Individual Card */
 .hero-card {
-    /* SNAP ALIGNMENT */
     scroll-snap-align: center;
-    
-    min-width: 85vw; /* On mobile, card takes 85% of width to show "peek" of next card */
+    min-width: 85vw;
     max-width: 85vw;
-    
     background: linear-gradient(145deg, #1e2130, #141625);
     border-radius: 24px;
     padding: 24px;
@@ -58,64 +48,20 @@ st.markdown("""
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     flex-shrink: 0;
     position: relative;
-    transition: transform 0.3s;
 }
 
-/* Desktop override: Make cards smaller on big screens */
 @media (min-width: 768px) {
-    .hero-card {
-        min-width: 320px;
-        max-width: 320px;
-    }
+    .hero-card { min-width: 320px; max-width: 320px; }
 }
 
-.player-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
-}
-
-.player-name {
-    font-size: 1.4rem;
-    font-weight: 800;
-    color: white;
-    margin-top: 5px;
-}
-
-.price {
-    color: #4CAF50;
-    font-weight: 900;
-    font-size: 1.8rem;
-    margin-bottom: 5px;
-}
-
-.role-badge {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
-    padding: 5px 12px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-weight: 600;
-}
+.player-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.player-name { font-size: 1.4rem; font-weight: 800; color: white; margin-top: 5px; }
+.price { color: #4CAF50; font-weight: 900; font-size: 1.8rem; margin-bottom: 5px; }
+.role-badge { background: rgba(255, 255, 255, 0.1); color: #ccc; padding: 5px 12px; border-radius: 12px; font-size: 0.75rem; text-transform: uppercase; font-weight: 600; }
 
 /* Stats Grid */
-.stat-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 1px solid rgba(255,255,255,0.08);
-}
-
-.stat-item {
-    display: flex;
-    flex-direction: column;
-}
-
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+.stat-item { display: flex; flex-direction: column; }
 .stat-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
 .stat-val { font-size: 1.1rem; font-weight: 700; color: #fff; }
 </style>
@@ -141,36 +87,42 @@ def get_team_logo(team_code):
     return TEAM_LOGOS.get(team_code, "https://cdn-icons-png.flaticon.com/512/103/103206.png")
 
 # -------------------------------------------------
-# SMART DATA LOADER
+# DATA LOADER (FAIL-SAFE)
 # -------------------------------------------------
 @st.cache_data
 def load_data():
-    csv_file = 'ipl_ball_by_ball_2008_2025.csv'
-    zip_file = 'data.zip'
+    # Priority list for file names
+    files = ['ipl_ball_by_ball_2008_2025.csv', 'data.zip']
     
-    if os.path.exists(csv_file):
-        df = pd.read_csv(csv_file)
-    elif os.path.exists(zip_file):
-        df = pd.read_csv(zip_file, compression='zip')
-    else:
-        st.error("❌ No data found! Please upload 'ipl_ball_by_ball_2008_2025.csv' or 'data.zip'.")
-        return pd.DataFrame()
-
-    df['date'] = pd.to_datetime(df.get('date'), errors='coerce')
-    df['year'] = df['date'].dt.year
-    return df
+    for f in files:
+        if os.path.exists(f):
+            try:
+                if f.endswith('.zip'):
+                    df = pd.read_csv(f, compression='zip')
+                else:
+                    df = pd.read_csv(f)
+                
+                df['date'] = pd.to_datetime(df.get('date'), errors='coerce')
+                df['year'] = df['date'].dt.year
+                return df
+            except Exception as e:
+                continue # Try next file if this one fails
+                
+    st.error("❌ CRITICAL ERROR: Could not find data file. Please upload 'ipl_ball_by_ball_2008_2025.csv' or 'data.zip'.")
+    return pd.DataFrame()
 
 # -------------------------------------------------
-# VALUATION ENGINE
+# VALUATION ENGINE (PURE STATS)
 # -------------------------------------------------
 @st.cache_data
 def calculate_valuation(df):
-    # Determine Team
+    # Team Mapping
     df_sorted = df.sort_values('date')
     last_team = df_sorted.groupby('batter')['batting_team'].last().combine_first(
         df_sorted.groupby('bowler')['bowling_team'].last()
     )
     
+    # Use Data from 2024 onwards for Valuation
     df_recent = df[df['year'] >= 2024]
     if df_recent.empty: return pd.DataFrame()
 
@@ -203,16 +155,17 @@ def calculate_valuation(df):
                       bowl.rename(columns={'bowler':'Player'}), 
                       on='Player', how='outer').fillna(0)
     
-    merged['Team'] = merged['Player'].map(last_team).fillna("Free Agent")
+    # Team Codes
     team_map = {
         'Chennai Super Kings': 'CSK', 'Mumbai Indians': 'MI', 'Royal Challengers Bangalore': 'RCB', 
         'Royal Challengers Bengaluru': 'RCB', 'Kolkata Knight Riders': 'KKR', 'Sunrisers Hyderabad': 'SRH', 
         'Rajasthan Royals': 'RR', 'Delhi Capitals': 'DC', 'Punjab Kings': 'PBKS', 'Lucknow Super Giants': 'LSG', 
         'Gujarat Titans': 'GT'
     }
+    merged['Team'] = merged['Player'].map(last_team).fillna("Free Agent")
     merged['Team_Code'] = merged['Team'].map(team_map).fillna("Free Agent")
 
-    # Points & Price
+    # Valuation Logic
     merged['Total_Points'] = merged[['bat_points', 'bowl_points']].max(axis=1) + (merged[['bat_points', 'bowl_points']].min(axis=1) * 0.3)
     merged['Rank'] = merged['Total_Points'].rank(ascending=False)
 
@@ -238,7 +191,7 @@ vals = calculate_valuation(df)
 st.title("🏏 CricValue")
 
 # --- CAROUSEL ---
-st.subheader("🔥 Top 10 Market Movers")
+st.subheader("🔥 Top Market Movers")
 
 cards_html = ""
 for _, p in vals.head(10).iterrows():
@@ -263,7 +216,7 @@ for _, p in vals.head(10).iterrows():
                 <span class='stat-val'>{p['Strike Rate']:.0f}</span>
             </div>
             <div class='stat-item'>
-                <span class='stat-label'>Wkts</span>
+                <span class='stat-label'>Wickets</span>
                 <span class='stat-val'>{int(p['Wickets'])}</span>
             </div>
             <div class='stat-item'>
@@ -283,19 +236,50 @@ st.subheader("🔎 Player Deep Dive")
 player = st.selectbox("Select Player", vals['Player'].unique())
 
 if player:
-    p = vals[vals['Player'] == player].iloc[0]
+    p_val = vals[vals['Player'] == player].iloc[0]
     
     # Top Metrics
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Market Value", f"₹ {p['Market Value (Cr)']:.2f} Cr")
-    c2.metric("Team", p['Team_Code'])
-    c3.metric("Role", p['Role'])
-    c4.metric("Impact Pts", f"{p['Total_Points']:.0f}")
+    c1.metric("Market Value", f"₹ {p_val['Market Value (Cr)']:.2f} Cr")
+    c2.metric("Team", p_val['Team_Code'])
+    c3.metric("Role", p_val['Role'])
+    c4.metric("Career Status", "Active" if p_val['Team_Code'] != 'Free Agent' else "Free Agent")
+
+    # --- CAREER DATA ---
+    p_bat = df[df['batter'] == player]
+    p_bowl = df[df['bowler'] == player]
     
-    # Simple Stats
-    st.caption("2024-2025 Performance")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"**Batting:** {int(p['Runs'])} Runs @ {p['Strike Rate']:.1f} SR")
-    with col2:
-        st.info(f"**Bowling:** {int(p['Wickets'])} Wkts @ {p['Economy']:.2f} Eco")
+    career_runs = p_bat['runs_off_bat'].sum()
+    career_wkts = p_bowl['is_wicket'].sum()
+    career_sr = (career_runs / p_bat['ball'].count() * 100) if not p_bat.empty else 0
+    career_eco = (p_bowl['total_runs'].sum() / p_bowl['ball'].count() * 6) if not p_bowl.empty else 0
+    
+    st.caption("Career Totals (All Seasons)")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.info(f"**Runs:** {career_runs}")
+    col2.info(f"**Strike Rate:** {career_sr:.1f}")
+    col3.info(f"**Wickets:** {career_wkts}")
+    col4.info(f"**Economy:** {career_eco:.2f}")
+
+    # --- OPTIONAL VIEWS ---
+    view_option = st.radio("View Mode", ["Season Breakdown (Table)", "Career Trend (Chart)"], horizontal=True)
+    
+    # Prepare Season Data
+    bat_yr = p_bat.groupby('year').agg(Runs=('runs_off_bat', 'sum'), Balls=('ball', 'count')).reset_index()
+    bat_yr['Strike Rate'] = (bat_yr['Runs'] / bat_yr['Balls'] * 100).round(1)
+    
+    bowl_yr = p_bowl.groupby('year').agg(Wickets=('is_wicket', 'sum'), Runs_Con=('total_runs', 'sum'), Balls=('ball', 'count')).reset_index()
+    bowl_yr['Economy'] = (bowl_yr['Runs_Con'] / bowl_yr['Balls'] * 6).round(2)
+    
+    season_stats = pd.merge(bat_yr, bowl_yr, on='year', how='outer').fillna(0).sort_values('year', ascending=False)
+    season_stats['year'] = season_stats['year'].astype(str)
+
+    if view_option == "Season Breakdown (Table)":
+        st.dataframe(
+            season_stats[['year', 'Runs', 'Strike Rate', 'Wickets', 'Economy']],
+            use_container_width=True,
+            hide_index=True
+        )
+    else:
+        st.caption("Runs per Season")
+        st.bar_chart(season_stats.set_index('year')['Runs'])
