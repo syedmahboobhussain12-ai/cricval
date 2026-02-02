@@ -1,8 +1,8 @@
+
 import streamlit as st
 import pandas as pd
-import altair as alt
-import os
 import numpy as np
+import os
 import requests
 from pathlib import Path
 
@@ -35,7 +35,6 @@ st.markdown("""
     border-radius: 22px;
     padding: 18px;
     border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
 }
 
 .player-name {
@@ -52,7 +51,7 @@ st.markdown("""
 .stat-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: 6px;
     margin-top: 10px;
 }
 
@@ -68,10 +67,6 @@ st.markdown("""
     font-size: 0.7rem;
     display: inline-block;
     margin-top: 6px;
-}
-
-.section {
-    margin-top: 30px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -92,49 +87,45 @@ TEAM_LOGOS = {
     "GT": "https://upload.wikimedia.org/wikipedia/en/0/09/Gujarat_Titans_Logo.svg",
 }
 
-# -------------------------------------------------
-# LOGO RESOLVER (WIKI → ASSETS FALLBACK)
-# -------------------------------------------------
 @st.cache_data
-def get_team_logo(team_code):
-    wiki_url = TEAM_LOGOS.get(team_code)
-    local_path = Path(f"assets/{team_code}.png")
+def get_team_logo(team):
+    wiki = TEAM_LOGOS.get(team)
+    local = Path(f"assets/{team}.png")
 
-    if wiki_url:
+    if wiki:
         try:
-            r = requests.head(wiki_url, timeout=2)
-            if r.status_code == 200:
-                return wiki_url
+            if requests.head(wiki, timeout=2).status_code == 200:
+                return wiki
         except:
             pass
 
-    if local_path.exists():
-        return str(local_path)
+    if local.exists():
+        return str(local)
 
     return None
 
 # -------------------------------------------------
-# DATA LOADING
+# DATA LOADER (FIXED FOR data.zip)
 # -------------------------------------------------
 @st.cache_data
 def load_data():
-    file = "ipl_ball_by_ball_2008_2025.csv"
-    if not os.path.exists(file):
+    if not os.path.exists("data.zip"):
+        st.error("data.zip not found in project root")
         return pd.DataFrame()
-    df = pd.read_csv(file)
-    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+
+    df = pd.read_csv("data.zip", compression="zip")
+
+    df['date'] = pd.to_datetime(df.get('date'), errors='coerce')
     df['year'] = df['date'].dt.year
+
     return df
 
 # -------------------------------------------------
 # VALUATION ENGINE (UNCHANGED)
 # -------------------------------------------------
 @st.cache_data
-def calculate_valuation(df, selected_year=None):
-    if selected_year:
-        df = df[df['year'] == selected_year]
-    else:
-        df = df[df['year'] >= 2024]
+def calculate_valuation(df):
+    df = df[df['year'] >= 2024]
 
     bat = df.groupby('batter').agg(
         Runs=('runs_off_bat', 'sum'),
@@ -193,7 +184,6 @@ def calculate_valuation(df, selected_year=None):
 # -------------------------------------------------
 df = load_data()
 if df.empty:
-    st.error("No data found.")
     st.stop()
 
 vals = calculate_valuation(df)
@@ -201,15 +191,15 @@ vals = calculate_valuation(df)
 st.title("🏏 CricValue – Market Board")
 
 # -------------------------------------------------
-# TOP 10 SWIPEABLE CARDS
+# TOP 10 SWIPE CARDS
 # -------------------------------------------------
 st.subheader("Top 10 Valued Players")
 
 st.markdown("<div class='hero-scroll'>", unsafe_allow_html=True)
 
 for _, p in vals.head(10).iterrows():
-    team_code = "CSK"  # placeholder (can be inferred later)
-    logo = get_team_logo(team_code)
+    team = "CSK"  # placeholder
+    logo = get_team_logo(team)
     logo_html = f"<img src='{logo}' width='36'>" if logo else ""
 
     st.markdown(f"""
@@ -233,7 +223,6 @@ st.markdown("</div>", unsafe_allow_html=True)
 # -------------------------------------------------
 # PLAYER PROFILE
 # -------------------------------------------------
-st.markdown("<div class='section'></div>", unsafe_allow_html=True)
 st.subheader("Player Profile")
 
 player = st.selectbox("Select Player", vals['Player'].unique())
