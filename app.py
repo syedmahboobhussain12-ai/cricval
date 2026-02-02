@@ -5,45 +5,24 @@ import base64
 import os
 import numpy as np
 
-# 1. PAGE CONFIG & CSS
-st.set_page_config(page_title="CricValue | Pro Edition", layout="wide", page_icon="🏏")
+# 1. PAGE CONFIG
+st.set_page_config(page_title="CricValue | Pure Data Edition", layout="wide", page_icon="🏏")
 
 st.markdown("""
 <style>
     .stApp { background-color: #0E1117; }
-    .hero-card { background: linear-gradient(145deg, #1e2130, #161822); border-radius: 20px; padding: 20px; text-align: center; border: 1px solid #444; box-shadow: 0 10px 20px rgba(0,0,0,0.4); margin-bottom: 20px; }
-    .player-name { color: white; margin: 10px 0; font-size: 1.5rem; font-weight: 700; }
-    .price-tag { color: #4CAF50; font-weight: 900; margin: 10px 0; font-size: 2rem; }
-    .role-badge { background-color: #333; color: #ccc; padding: 5px 15px; border-radius: 15px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+    .hero-card { background: linear-gradient(145deg, #1e2130, #161822); border-radius: 20px; padding: 20px; text-align: center; border: 1px solid #444; }
+    .price-tag { color: #4CAF50; font-weight: 900; font-size: 2.2rem; margin: 10px 0; }
     .stat-box { background-color: #1a1c24; padding: 15px; border-radius: 10px; border: 1px solid #333; text-align: center; margin-bottom: 10px; }
     .stat-label { color: #888; font-size: 0.8rem; text-transform: uppercase; }
     .stat-val { color: #fff; font-size: 1.2rem; font-weight: bold; }
 </style>
 """, unsafe_allow_html=True)
 
-# 2. IMAGE ASSETS ENGINE
-ONLINE_LOGOS = {
-    'CSK': 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2b/Chennai_Super_Kings_Logo.svg/1200px-Chennai_Super_Kings_Logo.svg.png',
-    'MI': 'https://upload.wikimedia.org/wikipedia/en/thumb/c/cd/Mumbai_Indians_Logo.svg/1200px-Mumbai_Indians_Logo.svg.png',
-    'RCB': 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2a/Royal_Challengers_Bangalore_2020.svg/1200px-Royal_Challengers_Bangalore_2020.svg.png',
-    'KKR': 'https://upload.wikimedia.org/wikipedia/en/thumb/4/4c/Kolkata_Knight_Riders_Logo.svg/1200px-Kolkata_Knight_Riders_Logo.svg.png',
-    'SRH': 'https://upload.wikimedia.org/wikipedia/en/thumb/8/81/Sunrisers_Hyderabad.svg/300px-Sunrisers_Hyderabad.svg.png',
-    'RR': 'https://upload.wikimedia.org/wikipedia/en/thumb/6/60/Rajasthan_Royals_Logo.svg/1200px-Rajasthan_Royals_Logo.svg.png',
-    'DC': 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2f/Delhi_Capitals.svg/1200px-Delhi_Capitals.svg.png',
-    'PBKS': 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d4/Punjab_Kings_Logo.svg/1200px-Punjab_Kings_Logo.svg.png',
-    'LSG': 'https://upload.wikimedia.org/wikipedia/en/a/a9/Lucknow_Super_Giants_IPL_Logo.svg',
-    'GT': 'https://upload.wikimedia.org/wikipedia/en/thumb/0/09/Gujarat_Titans_Logo.svg/1200px-Gujarat_Titans_Logo.svg.png',
-    'Free Agent': 'https://cdn-icons-png.flaticon.com/512/103/103206.png'
-}
-
-def get_team_logo(team_code):
-    return ONLINE_LOGOS.get(team_code, ONLINE_LOGOS['Free Agent'])
-
-# 3. DATA LOADING
+# 2. DATA LOADING
 @st.cache_data
-def load_raw_data():
-    csv_file = 'ipl_ball_by_ball_2008_2025.csv'
-    zip_file = 'data.zip'
+def load_data():
+    csv_file, zip_file = 'ipl_ball_by_ball_2008_2025.csv', 'data.zip'
     try:
         if os.path.exists(csv_file): df = pd.read_csv(csv_file)
         elif os.path.exists(zip_file): df = pd.read_csv(zip_file, compression='zip')
@@ -53,112 +32,134 @@ def load_raw_data():
         return df
     except: return pd.DataFrame()
 
-# 4. VALUATION LOGIC (Optimized for Profiles)
+# 3. PURE DATA VALUATION ENGINE (New Formula)
 @st.cache_data
-def get_season_stats(df, player_name):
-    # Batting per season
-    bat_s = df[df['batter'] == player_name].groupby('year').agg(
-        runs=('runs_off_bat', 'sum'),
-        balls=('ball', 'count')
-    ).reset_index()
-    bat_s['sr'] = (bat_s['runs'] / bat_s['balls'].replace(0, 1)) * 100
-    bat_s['points'] = bat_s['runs'] * ((bat_s['sr']/100)**2) / 1.25
-    
-    # Bowling per season
-    bowl_s = df[df['bowler'] == player_name].groupby('year').agg(
-        wkts=('is_wicket', 'sum'),
-        runs_conceded=('total_runs', 'sum'),
-        balls_bowled=('ball', 'count')
-    ).reset_index()
-    bowl_s['eco'] = (bowl_s['runs_conceded'] / bowl_s['balls_bowled'].replace(0, 1)) * 6
-    bowl_s['points'] = bowl_s.apply(lambda x: (x['wkts'] * ((9.0/max(4, x['eco']))**2) * 35) if x['wkts'] > 0 else 0, axis=1)
-    
-    return bat_s, bowl_s
-
-@st.cache_data
-def calculate_vals(df, selected_year=None):
+def calculate_pure_valuation(df, selected_year=None):
+    # Filter by Year
     if selected_year:
-        df_subset = df[df['year'] == selected_year]
-        latest_year = selected_year
+        df_sub = df[df['year'] == selected_year]
     else:
-        df_subset = df[df['year'] >= 2024]
-        latest_year = 2025
-
-    # Core Logic
-    df_sorted = df.sort_values('date')
-    last_team = pd.concat([df_sorted.groupby('batter')['batting_team'].last(), df_sorted.groupby('bowler')['bowling_team'].last()]).groupby(level=0).last()
+        df_sub = df[df['year'] >= 2024]
     
-    bat = df_subset.groupby('batter').agg(runs=('runs_off_bat', 'sum'), balls=('ball', 'count')).reset_index()
-    bat.columns = ['Player', 'bat_runs', 'bat_balls']; bat['sr'] = (bat['bat_runs'] / bat['bat_balls'].replace(0, 1)) * 100
-    bat['bat_points'] = bat['bat_runs'] * ((bat['sr']/100)**2) / 1.25
+    if df_sub.empty: return pd.DataFrame()
 
-    bowl = df_subset.groupby('bowler').agg(wkts=('is_wicket', 'sum'), runs=('total_runs', 'sum'), balls=('ball', 'count')).reset_index()
-    bowl.columns = ['Player', 'bowl_wkts', 'bowl_runs', 'bowl_balls']; bowl['eco'] = (bowl['bowl_runs'] / bowl['bowl_balls'].replace(0, 1)) * 6
-    bowl['bowl_points'] = bowl.apply(lambda x: (x['bowl_wkts'] * ((9.0/max(4, x['eco']))**2) * 35) if x['bowl_wkts'] > 0 else 0, axis=1)
-
-    merged = pd.merge(bat, bowl, on='Player', how='outer').fillna(0)
-    merged['Team_Code'] = merged['Player'].map(last_team).map({
-        'Chennai Super Kings': 'CSK', 'Mumbai Indians': 'MI', 'Royal Challengers Bangalore': 'RCB', 'Royal Challengers Bengaluru': 'RCB',
-        'Kolkata Knight Riders': 'KKR', 'Sunrisers Hyderabad': 'SRH', 'Rajasthan Royals': 'RR', 'Delhi Capitals': 'DC', 'Punjab Kings': 'PBKS',
-        'Lucknow Super Giants': 'LSG', 'Gujarat Titans': 'GT'
-    }).fillna("Free Agent")
+    # --- BATTING INDEX ---
+    bat = df_sub.groupby('batter').agg(
+        runs=('runs_off_bat', 'sum'),
+        balls=('ball', 'count'),
+        matches=('match_id', 'nunique'),
+        fours=('runs_off_bat', lambda x: (x == 4).sum()),
+        sixes=('runs_off_bat', lambda x: (x == 6).sum())
+    ).reset_index()
     
-    merged['perf_points'] = merged.apply(lambda x: max(x['bat_points'], x['bowl_points']) + (min(x['bat_points'], x['bowl_points']) * 0.4), axis=1)
-    merged['rank'] = merged['perf_points'].rank(ascending=False)
-    merged['Market_Value'] = merged['rank'].apply(lambda r: min(35.0, 35.0 / (1 + 0.045 * r)) if r > 3 else 30.0 + (3-r))
-    merged['Role'] = merged.apply(lambda x: "All-Rounder" if x['bat_points'] > 50 and x['bowl_points'] > 50 else ("Batter" if x['bat_points'] > x['bowl_points'] else "Bowler"), axis=1)
+    bat['sr'] = (bat['runs'] / bat['balls'].replace(0, 1)) * 100
+    bat['rpm'] = bat['runs'] / bat['matches']
+    bat['boundary_pct'] = ((bat['fours']*4 + bat['sixes']*6) / bat['runs'].replace(0, 1))
+    
+    # Normalize for Index (0-100 scale)
+    bat['sr_idx'] = (bat['sr'] / 200).clip(upper=1) * 100
+    bat['rpm_idx'] = (bat['rpm'] / 60).clip(upper=1) * 100
+    bat['b_pct_idx'] = (bat['boundary_pct'] / 0.8).clip(upper=1) * 100
+    
+    # Formula: 0.45(SR) + 0.35(RPM) + 0.20(B%)
+    bat['perf_score'] = (0.45 * bat['sr_idx']) + (0.35 * bat['rpm_idx']) + (0.20 * bat['b_pct_idx'])
+
+    # --- BOWLING INDEX ---
+    bowl = df_sub.groupby('bowler').agg(
+        wkts=('is_wicket', 'sum'),
+        runs_con=('total_runs', 'sum'),
+        balls_bowled=('ball', 'count'),
+        matches=('match_id', 'nunique'),
+        dots=('total_runs', lambda x: (x == 0).sum())
+    ).reset_index()
+    
+    bowl['wpm'] = bowl['wkts'] / bowl['matches']
+    bowl['eco'] = (bowl['runs_con'] / bowl['balls_bowled'].replace(0, 1)) * 6
+    bowl['dot_pct'] = bowl['dots'] / bowl['balls_bowled'].replace(0, 1)
+    
+    # Normalize
+    bowl['wpm_idx'] = (bowl['wpm'] / 3).clip(upper=1) * 100
+    bowl['eco_inv_idx'] = (1 - (bowl['eco'] / 15)).clip(lower=0) * 100
+    bowl['dot_idx'] = (bowl['dot_pct'] / 0.5).clip(upper=1) * 100
+    
+    # Formula: 0.4(WPM) + 0.4(Eco) + 0.2(Dot%)
+    bowl['perf_score'] = (0.4 * bowl['wpm_idx']) + (0.4 * bowl['eco_inv_idx']) + (0.2 * bowl['dot_idx'])
+
+    # --- ROLE MULTIPLIERS ---
+    # Scarcity derived from overs
+    df_sub['over_num'] = (df_sub['ball'].astype(int))
+    
+    death_bowlers = df_sub[df_sub['over_num'] >= 16]['bowler'].unique()
+    pp_bowlers = df_sub[df_sub['over_num'] <= 6]['bowler'].unique()
+    
+    # --- MERGE & PRICING ---
+    bat = bat.rename(columns={'batter': 'Player'})
+    bowl = bowl.rename(columns={'bowler': 'Player'})
+    
+    merged = pd.merge(bat[['Player', 'perf_score', 'runs', 'sr']], 
+                      bowl[['Player', 'perf_score', 'wkts', 'eco']], 
+                      on='Player', how='outer', suffixes=('_bat', '_bowl')).fillna(0)
+    
+    # Final Multiplier Logic
+    def calculate_price(row):
+        base = 3.0 # Default Batter Base
+        mult = 1.0
+        
+        # Scarcity Check
+        if row['perf_score_bat'] > 10 and row['perf_score_bowl'] > 10: 
+            base = 5.0; mult = 1.35 # All Rounder
+        elif row['perf_score_bowl'] > row['perf_score_bat']:
+            base = 3.5 # Bowler Base
+            if row['Player'] in death_bowlers: mult = 1.25
+            elif row['Player'] in pp_bowlers: mult = 1.15
+        else:
+            if row['sr'] > 160: mult = 1.3 # Finisher
+        
+        score = max(row['perf_score_bat'], row['perf_score_bowl'])
+        val = base + (score * 0.25 * mult)
+        return min(32.0, val)
+
+    merged['Market_Value'] = merged.apply(calculate_price, axis=1)
+    merged['Role'] = merged.apply(lambda x: "All-Rounder" if x['perf_score_bat'] > 20 and x['perf_score_bowl'] > 20 else ("Batter" if x['perf_score_bat'] > x['perf_score_bowl'] else "Bowler"), axis=1)
     
     return merged.sort_values('Market_Value', ascending=False)
 
-# 5. UI APP
-df_raw = load_raw_data()
-if df_raw.empty: st.stop()
+# 4. APP RENDER
+df_raw = load_data()
+if df_raw.empty: st.error("No Data Found"); st.stop()
 
 with st.sidebar:
     st.title("CricValue Pro")
-    mode = st.radio("Mode", ["Projected Value", "Historical Season"])
-    selected_year = st.selectbox("Season", sorted(df_raw['year'].unique(), reverse=True)) if mode == "Historical Season" else None
+    mode = st.radio("Valuation Mode", ["2025 Market Projection", "Historical Season"])
+    sel_year = st.selectbox("Year", sorted(df_raw['year'].unique(), reverse=True)) if mode == "Historical Season" else None
 
-vals = calculate_vals(df_raw, selected_year)
+vals = calculate_pure_valuation(df_raw, sel_year)
 
 # TABS
-tab1, tab2, tab3 = st.tabs(["📋 Scouting", "📈 Clusters", "🔎 Career Profile"])
+t1, t2, t3 = st.tabs(["📋 Rankings", "📈 Clusters", "🔎 Profile Deep-Dive"])
 
-with tab1:
-    st.dataframe(vals.head(50), use_container_width=True, hide_index=True)
+with t1:
+    st.dataframe(vals[['Player', 'Role', 'Market_Value', 'perf_score_bat', 'perf_score_bowl']], use_container_width=True, hide_index=True)
 
-with tab3:
-    col_sel, _ = st.columns([1, 2])
-    p_name = col_sel.selectbox("Select Player", sorted(df_raw['batter'].unique()))
-    
+with t3:
+    p_name = st.selectbox("Select Player", sorted(vals['Player'].unique()))
     if p_name:
-        bat_s, bowl_s = get_season_stats(df_raw, p_name)
-        
-        # Profile Header
+        p_res = vals[vals['Player'] == p_name].iloc[0]
         st.markdown(f"## {p_name}")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(f"<div class='stat-box'><div class='stat-label'>Career Runs</div><div class='stat-val'>{bat_s['runs'].sum()}</div></div>", unsafe_allow_html=True)
-        c2.markdown(f"<div class='stat-box'><div class='stat-label'>Career Wickets</div><div class='stat-val'>{bowl_s['wkts'].sum()}</div></div>", unsafe_allow_html=True)
-        c3.markdown(f"<div class='stat-box'><div class='stat-label'>Avg SR</div><div class='stat-val'>{bat_s['sr'].mean():.1f}</div></div>", unsafe_allow_html=True)
-        c4.markdown(f"<div class='stat-box'><div class='stat-label'>Best Season</div><div class='stat-val'>{int(bat_s.loc[bat_s['points'].idxmax(), 'year']) if not bat_s.empty else 'N/A'}</div></div>", unsafe_allow_html=True)
+        
+        # KEY VALUATION
+        st.markdown(f"<div class='hero-card'><div class='stat-label'>Data-Driven Valuation</div><div class='price-tag'>₹ {p_res['Market_Value']:.2f} Cr</div></div>", unsafe_allow_html=True)
+        
+        # CAREER BREAKDOWN
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(f"<div class='stat-box'><div class='stat-label'>Batting Index</div><div class='stat-val'>{p_res['perf_score_bat']:.1f}</div></div>", unsafe_allow_html=True)
+        c2.markdown(f"<div class='stat-box'><div class='stat-label'>Bowling Index</div><div class='stat-val'>{p_res['perf_score_bowl']:.1f}</div></div>", unsafe_allow_html=True)
+        c3.markdown(f"<div class='stat-box'><div class='stat-label'>Role</div><div class='stat-val'>{p_res['Role']}</div></div>", unsafe_allow_html=True)
 
-        # Career Chart
-        st.markdown("### Career Impact Trajectory")
-        chart_data = pd.merge(bat_s[['year', 'points']], bowl_s[['year', 'points']], on='year', how='outer', suffixes=('_bat', '_bowl')).fillna(0)
-        chart_data['Total Impact'] = chart_data['points_bat'] + chart_data['points_bowl']
+        # Career History
+        hist_bat = df_raw[df_raw['batter'] == p_name].groupby('year')['runs_off_bat'].sum().reset_index()
+        hist_bowl = df_raw[df_raw['bowler'] == p_name].groupby('year')['is_wicket'].sum().reset_index()
         
-        line_chart = alt.Chart(chart_data).mark_line(point=True, color='#4CAF50').encode(
-            x=alt.X('year:O', title='Season'),
-            y=alt.Y('Total Impact:Q', title='Impact Points'),
-            tooltip=['year', 'Total Impact']
-        ).properties(height=300)
-        st.altair_chart(line_chart, use_container_width=True)
-        
-        # Season Breakdown Table
-        st.markdown("### Season-by-Season Breakdown")
-        breakdown = pd.merge(
-            bat_s.rename(columns={'runs': 'Runs', 'sr': 'S/R'}),
-            bowl_s.rename(columns={'wkts': 'Wickets', 'eco': 'Economy'}),
-            on='year', how='outer'
-        ).fillna(0)[['year', 'Runs', 'S/R', 'Wickets', 'Economy']].sort_values('year', ascending=False)
-        st.table(breakdown)
+        st.markdown("### Career Progression")
+        hist_chart = alt.Chart(hist_bat).mark_line(point=True).encode(x='year:O', y='runs_off_bat:Q', tooltip=['year', 'runs_off_bat']).properties(height=250)
+        st.altair_chart(hist_chart, use_container_width=True)
