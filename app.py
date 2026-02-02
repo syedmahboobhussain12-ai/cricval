@@ -1,10 +1,7 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import os
-import requests
-from pathlib import Path
 
 # -------------------------------------------------
 # PAGE CONFIG
@@ -87,14 +84,14 @@ def get_team_logo(team_code):
     return TEAM_LOGOS.get(team_code, "https://cdn-icons-png.flaticon.com/512/103/103206.png")
 
 # -------------------------------------------------
-# DATA LOADER (FAIL-SAFE)
+# FAIL-SAFE DATA LOADER
 # -------------------------------------------------
 @st.cache_data
 def load_data():
-    # Priority list for file names
-    files = ['ipl_ball_by_ball_2008_2025.csv', 'data.zip']
+    # Try all possible filenames
+    possible_files = ['ipl_ball_by_ball_2008_2025.csv', 'data.zip', 'IPL_Ball_By_Ball_2008_2025.csv']
     
-    for f in files:
+    for f in possible_files:
         if os.path.exists(f):
             try:
                 if f.endswith('.zip'):
@@ -105,10 +102,10 @@ def load_data():
                 df['date'] = pd.to_datetime(df.get('date'), errors='coerce')
                 df['year'] = df['date'].dt.year
                 return df
-            except Exception as e:
-                continue # Try next file if this one fails
+            except:
+                continue
                 
-    st.error("❌ CRITICAL ERROR: Could not find data file. Please upload 'ipl_ball_by_ball_2008_2025.csv' or 'data.zip'.")
+    st.error("❌ ERROR: Data file not found! Please upload 'ipl_ball_by_ball_2008_2025.csv' or 'data.zip'.")
     return pd.DataFrame()
 
 # -------------------------------------------------
@@ -122,7 +119,7 @@ def calculate_valuation(df):
         df_sorted.groupby('bowler')['bowling_team'].last()
     )
     
-    # Use Data from 2024 onwards for Valuation
+    # Use Recent Data (2024-2025)
     df_recent = df[df['year'] >= 2024]
     if df_recent.empty: return pd.DataFrame()
 
@@ -155,19 +152,19 @@ def calculate_valuation(df):
                       bowl.rename(columns={'bowler':'Player'}), 
                       on='Player', how='outer').fillna(0)
     
-    # Team Codes
+    merged['Team'] = merged['Player'].map(last_team).fillna("Free Agent")
+    
     team_map = {
         'Chennai Super Kings': 'CSK', 'Mumbai Indians': 'MI', 'Royal Challengers Bangalore': 'RCB', 
         'Royal Challengers Bengaluru': 'RCB', 'Kolkata Knight Riders': 'KKR', 'Sunrisers Hyderabad': 'SRH', 
         'Rajasthan Royals': 'RR', 'Delhi Capitals': 'DC', 'Punjab Kings': 'PBKS', 'Lucknow Super Giants': 'LSG', 
         'Gujarat Titans': 'GT'
     }
-    merged['Team'] = merged['Player'].map(last_team).fillna("Free Agent")
     merged['Team_Code'] = merged['Team'].map(team_map).fillna("Free Agent")
 
-    # Valuation Logic
-    merged['Total_Points'] = merged[['bat_points', 'bowl_points']].max(axis=1) + (merged[['bat_points', 'bowl_points']].min(axis=1) * 0.3)
-    merged['Rank'] = merged['Total_Points'].rank(ascending=False)
+    # Internal Ranking Logic (Hidden from UI)
+    merged['Composite_Score'] = merged[['bat_points', 'bowl_points']].max(axis=1) + (merged[['bat_points', 'bowl_points']].min(axis=1) * 0.3)
+    merged['Rank'] = merged['Composite_Score'].rank(ascending=False)
 
     def get_price(rank):
         if rank <= 1: return 30.0
@@ -238,12 +235,12 @@ player = st.selectbox("Select Player", vals['Player'].unique())
 if player:
     p_val = vals[vals['Player'] == player].iloc[0]
     
-    # Top Metrics
+    # Top Metrics (NO Impact Points)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Market Value", f"₹ {p_val['Market Value (Cr)']:.2f} Cr")
     c2.metric("Team", p_val['Team_Code'])
     c3.metric("Role", p_val['Role'])
-    c4.metric("Career Status", "Active" if p_val['Team_Code'] != 'Free Agent' else "Free Agent")
+    c4.metric("Recent Matches", f"{int(p_val['Matches'])}") # Pure Stat
 
     # --- CAREER DATA ---
     p_bat = df[df['batter'] == player]
@@ -251,8 +248,11 @@ if player:
     
     career_runs = p_bat['runs_off_bat'].sum()
     career_wkts = p_bowl['is_wicket'].sum()
-    career_sr = (career_runs / p_bat['ball'].count() * 100) if not p_bat.empty else 0
-    career_eco = (p_bowl['total_runs'].sum() / p_bowl['ball'].count() * 6) if not p_bowl.empty else 0
+    career_balls = p_bat['ball'].count()
+    career_balls_bowled = p_bowl['ball'].count()
+    
+    career_sr = (career_runs / career_balls * 100) if career_balls > 0 else 0
+    career_eco = (p_bowl['total_runs'].sum() / career_balls_bowled * 6) if career_balls_bowled > 0 else 0
     
     st.caption("Career Totals (All Seasons)")
     col1, col2, col3, col4 = st.columns(4)
@@ -262,7 +262,8 @@ if player:
     col4.info(f"**Economy:** {career_eco:.2f}")
 
     # --- OPTIONAL VIEWS ---
-    view_option = st.radio("View Mode", ["Season Breakdown (Table)", "Career Trend (Chart)"], horizontal=True)
+    st.markdown("### 📊 Performance History")
+    view_option = st.radio("Select View:", ["Season Breakdown (Table)", "Runs Chart", "Wickets Chart"], horizontal=True)
     
     # Prepare Season Data
     bat_yr = p_bat.groupby('year').agg(Runs=('runs_off_bat', 'sum'), Balls=('ball', 'count')).reset_index()
@@ -280,6 +281,7 @@ if player:
             use_container_width=True,
             hide_index=True
         )
-    else:
-        st.caption("Runs per Season")
+    elif view_option == "Runs Chart":
         st.bar_chart(season_stats.set_index('year')['Runs'])
+    else:
+        st.bar_chart(season_stats.set_index('year')['Wickets'])
