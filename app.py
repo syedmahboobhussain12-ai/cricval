@@ -31,6 +31,10 @@ st.markdown(
         border-left: 5px solid #f2c94c; border-radius: 10px; padding: 0.8rem 1rem;
         background: rgba(242,201,76,0.12); font-weight: 600;
     }
+    .ott-banner {
+        margin-top: 0.8rem; border-radius: 12px; padding: 0.85rem 1rem;
+        border: 1px solid #4e5b80; background: linear-gradient(120deg, rgba(78,91,128,0.45), rgba(35,41,59,0.85));
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -297,7 +301,74 @@ def compute_scores(roster: dict):
     else:
         verdict = "Strong Theatrical Performer 🍿"
 
-    return critical, box_office, verdict
+    roster_names = {roster.get(role, {}).get("name", "") for role in ROLES}
+
+    if box_office < 50:
+        opening_day = 2 + (box_office / 50) * 3
+    elif box_office < 80:
+        opening_day = 5 + ((box_office - 50) / 30) * 20
+    elif box_office < 95:
+        opening_day = 25 + ((box_office - 80) / 15) * 25
+    else:
+        opening_day = 50 + ((box_office - 95) / 5) * 22
+
+    if critical < 40:
+        legs_multiplier = 1.35 + (critical / 40) * 0.35
+    elif critical < 60:
+        legs_multiplier = 1.7 + ((critical - 40) / 20) * 0.8
+    elif critical < 80:
+        legs_multiplier = 2.5 + ((critical - 60) / 20) * 1.5
+    else:
+        legs_multiplier = 4.0 + ((critical - 80) / 20) * 2.0
+
+    lifetime_domestic = opening_day * legs_multiplier
+
+    global_icon_count = sum(
+        name in roster_names for name in {"Shah Rukh Khan", "Prabhas", "S.S. Rajamouli"}
+    )
+    international_push_count = sum(
+        name in roster_names for name in {"Prashanth Neel", "Jr. NTR & Ram Charan", "A.R. Rahman"}
+    )
+    overseas_multiplier = (
+        1.15
+        + (box_office / 100) * 0.25
+        + global_icon_count * 0.32
+        + international_push_count * 0.12
+    )
+    worldwide_gross = lifetime_domestic * overseas_multiplier
+
+    if verdict == "Disastrous Box Office Dud 📉":
+        ott_platform = "CineNow+"
+        ott_note = "Picked up cheaply by a tier-3 streaming app to fill their late-night catalog gap."
+    elif any(name in roster_names for name in {"S.S. Rajamouli", "Prashanth Neel", "Prabhas"}):
+        ott_platform = "Netflix" if worldwide_gross >= 180 else "Prime Video"
+        ott_note = "Record-breaking multi-lingual streaming deal locked after theatrical frenzy."
+    elif critical >= VERDICT_HIGH and any(
+        name in roster_names for name in {"Imtiaz Ali", "Sanjay Leela Bhansali"}
+    ):
+        ott_platform = "Netflix"
+        ott_note = "Topping the global non-English viewing charts within days of release."
+    elif box_office >= VERDICT_HIGH and critical < VERDICT_HIGH:
+        ott_platform = "Prime Video" if box_office >= 90 else "Zee5"
+        ott_note = "Set to premiere on a festive weekend with major family-audience push."
+    else:
+        ott_platform = "Hotstar"
+        ott_note = "Secured a solid post-theatrical window with broad regional outreach."
+
+    return {
+        "critical": critical,
+        "box_office": box_office,
+        "verdict": verdict,
+        "opening_day_cr": opening_day,
+        "lifetime_domestic_cr": lifetime_domestic,
+        "worldwide_cr": worldwide_gross,
+        "ott_platform": ott_platform,
+        "ott_note": ott_note,
+    }
+
+
+def format_currency_cr(value: float) -> str:
+    return f"₹{value:,.1f} Cr"
 
 
 def reset_game():
@@ -355,12 +426,7 @@ with left:
         disabled=(not all_filled) or release_locked,
         type="primary",
     ):
-        c_score, b_score, verdict = compute_scores(st.session_state.roster)
-        st.session_state.result = {
-            "critical": c_score,
-            "box_office": b_score,
-            "verdict": verdict,
-        }
+        st.session_state.result = compute_scores(st.session_state.roster)
 
     if st.session_state.result:
         result = st.session_state.result
@@ -373,7 +439,24 @@ with left:
             f"<div class='scorebox'><div style='color:#9fa8c6;'>Box Office Collection</div><div style='font-size:2rem;font-weight:800;'>{result['box_office']}/100</div></div>",
             unsafe_allow_html=True,
         )
+        f1, f2, f3 = st.columns(3)
+        f1.markdown(
+            f"<div class='scorebox'><div style='color:#9fa8c6;'>Opening Day (Domestic)</div><div style='font-size:1.2rem;font-weight:800;'>{format_currency_cr(result['opening_day_cr'])}</div></div>",
+            unsafe_allow_html=True,
+        )
+        f2.markdown(
+            f"<div class='scorebox'><div style='color:#9fa8c6;'>Lifetime Domestic</div><div style='font-size:1.2rem;font-weight:800;'>{format_currency_cr(result['lifetime_domestic_cr'])}</div></div>",
+            unsafe_allow_html=True,
+        )
+        f3.markdown(
+            f"<div class='scorebox'><div style='color:#9fa8c6;'>Worldwide Gross</div><div style='font-size:1.2rem;font-weight:800;'>{format_currency_cr(result['worldwide_cr'])}</div></div>",
+            unsafe_allow_html=True,
+        )
         st.markdown(f"<div class='verdict'>Final Verdict: {result['verdict']}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='ott-banner'><strong>Post-Theatrical OTT Rights: {result['ott_platform']}</strong><br>{result['ott_note']}</div>",
+            unsafe_allow_html=True,
+        )
 
         if st.button("🔁 Try For Another Hit", use_container_width=True):
             reset_game()
