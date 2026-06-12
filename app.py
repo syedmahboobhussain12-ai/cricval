@@ -330,7 +330,11 @@ def compute_scores(roster: dict):
     else:
         verdict = "Strong Theatrical Performer 🍿"
 
-    roster_names = {pick["name"] for role in ROLES if (pick := roster.get(role)) and pick.get("name")}
+    roster_names = set()
+    for role in ROLES:
+        pick = roster.get(role)
+        if pick and pick.get("name"):
+            roster_names.add(pick["name"])
 
     if box_office < 50:
         opening_day = OPENING_DAY_BANDS["low_base"] + (box_office / 50) * OPENING_DAY_BANDS["low_span"]
@@ -462,16 +466,16 @@ with left:
             f"<div class='scorebox'><div style='color:#9fa8c6;'>Box Office Collection</div><div style='font-size:2rem;font-weight:800;'>{result['box_office']}/100</div></div>",
             unsafe_allow_html=True,
         )
-        f1, f2, f3 = st.columns(3)
-        f1.markdown(
+        opening_col, domestic_col, worldwide_col = st.columns(3)
+        opening_col.markdown(
             f"<div class='scorebox'><div style='color:#9fa8c6;'>Opening Day (Domestic)</div><div style='font-size:1.2rem;font-weight:800;'>{format_currency_cr(result['opening_day_cr'])}</div></div>",
             unsafe_allow_html=True,
         )
-        f2.markdown(
+        domestic_col.markdown(
             f"<div class='scorebox'><div style='color:#9fa8c6;'>Lifetime Domestic</div><div style='font-size:1.2rem;font-weight:800;'>{format_currency_cr(result['lifetime_domestic_cr'])}</div></div>",
             unsafe_allow_html=True,
         )
-        f3.markdown(
+        worldwide_col.markdown(
             f"<div class='scorebox'><div style='color:#9fa8c6;'>Worldwide Gross</div><div style='font-size:1.2rem;font-weight:800;'>{format_currency_cr(result['worldwide_cr'])}</div></div>",
             unsafe_allow_html=True,
         )
