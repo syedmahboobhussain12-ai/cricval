@@ -221,6 +221,17 @@ ROLE_WEIGHTS = {
 }
 
 ROLES = ["Director", "Lead Male", "Lead Female", "Music Director", "Writer"]
+SYNERGY_BONUS = 15
+RANDOM_VARIANCE_MIN = -5
+RANDOM_VARIANCE_MAX = 5
+VERDICT_HISTORIC = 95
+VERDICT_HIGH = 80
+VERDICT_MID = 65
+VERDICT_LOW = 50
+SYNERGY_RULES = [
+    (("Lead Male", "Shah Rukh Khan"), ("Director", "Aditya Chopra")),
+    (("Director", "S.S. Rajamouli"), ("Writer", "K.V. Vijayendra Prasad")),
+]
 
 
 def random_movie():
@@ -253,37 +264,35 @@ def compute_scores(roster: dict):
     critical = 0
     box_office = 0
 
-    for role, pick in roster.items():
+    for role in ROLES:
+        pick = roster.get(role)
+        if not pick:
+            continue
         person = pick["name"]
         c_score, b_score = ROLE_WEIGHTS.get(role, {}).get(person, (10, 10))
         critical += c_score
         box_office += b_score
 
-    director = roster["Director"]["name"]
-    lead_male = roster["Lead Male"]["name"]
-    writer = roster["Writer"]["name"]
+    for (role_a, person_a), (role_b, person_b) in SYNERGY_RULES:
+        current_a = roster.get(role_a, {}).get("name", "")
+        current_b = roster.get(role_b, {}).get("name", "")
+        if current_a == person_a and current_b == person_b:
+            critical += SYNERGY_BONUS
+            box_office += SYNERGY_BONUS
 
-    if lead_male == "Shah Rukh Khan" and director == "Aditya Chopra":
-        critical += 15
-        box_office += 15
-
-    if director == "S.S. Rajamouli" and writer == "K.V. Vijayendra Prasad":
-        critical += 15
-        box_office += 15
-
-    critical += random.randint(-5, 5)
-    box_office += random.randint(-5, 5)
+    critical += random.randint(RANDOM_VARIANCE_MIN, RANDOM_VARIANCE_MAX)
+    box_office += random.randint(RANDOM_VARIANCE_MIN, RANDOM_VARIANCE_MAX)
 
     critical = max(0, min(100, critical))
     box_office = max(0, min(100, box_office))
 
-    if critical >= 95 and box_office >= 95:
+    if critical >= VERDICT_HISTORIC and box_office >= VERDICT_HISTORIC:
         verdict = "All-Time Historic Blockbuster 🏆"
-    elif critical >= 80 and box_office < 65:
+    elif critical >= VERDICT_HIGH and box_office < VERDICT_MID:
         verdict = "Cult Classic Masterpiece 🎬"
-    elif critical < 65 and box_office >= 80:
+    elif critical < VERDICT_MID and box_office >= VERDICT_HIGH:
         verdict = "Commercial Masala Hit 💥"
-    elif critical < 50 and box_office < 50:
+    elif critical < VERDICT_LOW and box_office < VERDICT_LOW:
         verdict = "Disastrous Box Office Dud 📉"
     else:
         verdict = "Strong Theatrical Performer 🍿"
@@ -339,7 +348,13 @@ with left:
 
     all_filled = all(st.session_state.roster[r] is not None for r in ROLES)
 
-    if st.button("🎞️ Release Movie", use_container_width=True, disabled=not all_filled, type="primary"):
+    release_locked = st.session_state.result is not None
+    if st.button(
+        "🎞️ Release Movie",
+        use_container_width=True,
+        disabled=(not all_filled) or release_locked,
+        type="primary",
+    ):
         c_score, b_score, verdict = compute_scores(st.session_state.roster)
         st.session_state.result = {
             "critical": c_score,
@@ -366,6 +381,7 @@ with left:
 
 with right:
     movie = st.session_state.current_movie
+    safe_movie_key = "".join(ch if ch.isalnum() else "_" for ch in movie["title"])
     st.subheader("Current Roll")
     st.markdown(
         f"""
@@ -385,7 +401,7 @@ with right:
             f"Draft {person} as {role}",
             use_container_width=True,
             disabled=locked,
-            key=f"draft_{role}_{movie['title']}_{movie['year']}",
+            key=f"draft_{role.replace(' ', '_')}_{safe_movie_key}_{movie['year']}",
             on_click=draft,
             args=(role,),
         )
