@@ -236,6 +236,34 @@ SYNERGY_RULES = [
     (("Lead Male", "Shah Rukh Khan"), ("Director", "Aditya Chopra")),
     (("Director", "S.S. Rajamouli"), ("Writer", "K.V. Vijayendra Prasad")),
 ]
+GLOBAL_ICON_NAMES = {"Shah Rukh Khan", "Prabhas", "S.S. Rajamouli"}
+INTERNATIONAL_PUSH_NAMES = {"Prashanth Neel", "Jr. NTR & Ram Charan", "A.R. Rahman"}
+PAN_INDIA_NAMES = {"S.S. Rajamouli", "Prashanth Neel", "Prabhas"}
+AUTEUR_NAMES = {"Imtiaz Ali", "Sanjay Leela Bhansali"}
+OPENING_DAY_BANDS = {
+    "low_base": 2.0,
+    "low_span": 3.0,
+    "mid_base": 5.0,
+    "mid_span": 20.0,
+    "high_base": 25.0,
+    "high_span": 25.0,
+    "record_base": 50.0,
+    "record_span": 22.0,
+}
+LEGS_MULTIPLIER_BANDS = {
+    "poor_base": 1.35,
+    "poor_span": 0.35,
+    "weak_base": 1.7,
+    "weak_span": 0.8,
+    "good_base": 2.5,
+    "good_span": 1.5,
+    "great_base": 4.0,
+    "great_span": 2.0,
+}
+OVERSEAS_MULTIPLIER_BASE = 1.15
+OVERSEAS_SCORE_SPAN = 0.25
+OVERSEAS_GLOBAL_ICON_BOOST = 0.32
+OVERSEAS_INTERNATIONAL_PUSH_BOOST = 0.12
 
 
 def random_movie():
@@ -304,48 +332,42 @@ def compute_scores(roster: dict):
     roster_names = {roster.get(role, {}).get("name", "") for role in ROLES}
 
     if box_office < 50:
-        opening_day = 2 + (box_office / 50) * 3
+        opening_day = OPENING_DAY_BANDS["low_base"] + (box_office / 50) * OPENING_DAY_BANDS["low_span"]
     elif box_office < 80:
-        opening_day = 5 + ((box_office - 50) / 30) * 20
+        opening_day = OPENING_DAY_BANDS["mid_base"] + ((box_office - 50) / 30) * OPENING_DAY_BANDS["mid_span"]
     elif box_office < 95:
-        opening_day = 25 + ((box_office - 80) / 15) * 25
+        opening_day = OPENING_DAY_BANDS["high_base"] + ((box_office - 80) / 15) * OPENING_DAY_BANDS["high_span"]
     else:
-        opening_day = 50 + ((box_office - 95) / 5) * 22
+        opening_day = OPENING_DAY_BANDS["record_base"] + ((box_office - 95) / 5) * OPENING_DAY_BANDS["record_span"]
 
     if critical < 40:
-        legs_multiplier = 1.35 + (critical / 40) * 0.35
+        legs_multiplier = LEGS_MULTIPLIER_BANDS["poor_base"] + (critical / 40) * LEGS_MULTIPLIER_BANDS["poor_span"]
     elif critical < 60:
-        legs_multiplier = 1.7 + ((critical - 40) / 20) * 0.8
+        legs_multiplier = LEGS_MULTIPLIER_BANDS["weak_base"] + ((critical - 40) / 20) * LEGS_MULTIPLIER_BANDS["weak_span"]
     elif critical < 80:
-        legs_multiplier = 2.5 + ((critical - 60) / 20) * 1.5
+        legs_multiplier = LEGS_MULTIPLIER_BANDS["good_base"] + ((critical - 60) / 20) * LEGS_MULTIPLIER_BANDS["good_span"]
     else:
-        legs_multiplier = 4.0 + ((critical - 80) / 20) * 2.0
+        legs_multiplier = LEGS_MULTIPLIER_BANDS["great_base"] + ((critical - 80) / 20) * LEGS_MULTIPLIER_BANDS["great_span"]
 
     lifetime_domestic = opening_day * legs_multiplier
 
-    global_icon_count = sum(
-        name in roster_names for name in {"Shah Rukh Khan", "Prabhas", "S.S. Rajamouli"}
-    )
-    international_push_count = sum(
-        name in roster_names for name in {"Prashanth Neel", "Jr. NTR & Ram Charan", "A.R. Rahman"}
-    )
+    global_icon_count = sum(name in roster_names for name in GLOBAL_ICON_NAMES)
+    international_push_count = sum(name in roster_names for name in INTERNATIONAL_PUSH_NAMES)
     overseas_multiplier = (
-        1.15
-        + (box_office / 100) * 0.25
-        + global_icon_count * 0.32
-        + international_push_count * 0.12
+        OVERSEAS_MULTIPLIER_BASE
+        + (box_office / 100) * OVERSEAS_SCORE_SPAN
+        + global_icon_count * OVERSEAS_GLOBAL_ICON_BOOST
+        + international_push_count * OVERSEAS_INTERNATIONAL_PUSH_BOOST
     )
     worldwide_gross = lifetime_domestic * overseas_multiplier
 
     if verdict == "Disastrous Box Office Dud 📉":
         ott_platform = "CineNow+"
         ott_note = "Picked up cheaply by a tier-3 streaming app to fill their late-night catalog gap."
-    elif any(name in roster_names for name in {"S.S. Rajamouli", "Prashanth Neel", "Prabhas"}):
+    elif any(name in roster_names for name in PAN_INDIA_NAMES):
         ott_platform = "Netflix" if worldwide_gross >= 180 else "Prime Video"
         ott_note = "Record-breaking multi-lingual streaming deal locked after theatrical frenzy."
-    elif critical >= VERDICT_HIGH and any(
-        name in roster_names for name in {"Imtiaz Ali", "Sanjay Leela Bhansali"}
-    ):
+    elif critical >= VERDICT_HIGH and any(name in roster_names for name in AUTEUR_NAMES):
         ott_platform = "Netflix"
         ott_note = "Topping the global non-English viewing charts within days of release."
     elif box_office >= VERDICT_HIGH and critical < VERDICT_HIGH:
