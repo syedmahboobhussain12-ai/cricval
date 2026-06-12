@@ -264,6 +264,7 @@ OVERSEAS_MULTIPLIER_BASE = 1.15
 OVERSEAS_SCORE_SPAN = 0.25
 OVERSEAS_GLOBAL_ICON_BOOST = 0.32
 OVERSEAS_INTERNATIONAL_PUSH_BOOST = 0.12
+OTT_PREMIUM_THRESHOLD_CR = 180
 
 
 def random_movie():
@@ -329,7 +330,7 @@ def compute_scores(roster: dict):
     else:
         verdict = "Strong Theatrical Performer 🍿"
 
-    roster_names = {roster.get(role, {}).get("name", "") for role in ROLES}
+    roster_names = {pick["name"] for role in ROLES if (pick := roster.get(role)) and pick.get("name")}
 
     if box_office < 50:
         opening_day = OPENING_DAY_BANDS["low_base"] + (box_office / 50) * OPENING_DAY_BANDS["low_span"]
@@ -365,7 +366,7 @@ def compute_scores(roster: dict):
         ott_platform = "CineNow+"
         ott_note = "Picked up cheaply by a tier-3 streaming app to fill their late-night catalog gap."
     elif any(name in roster_names for name in PAN_INDIA_NAMES):
-        ott_platform = "Netflix" if worldwide_gross >= 180 else "Prime Video"
+        ott_platform = "Netflix" if worldwide_gross >= OTT_PREMIUM_THRESHOLD_CR else "Prime Video"
         ott_note = "Record-breaking multi-lingual streaming deal locked after theatrical frenzy."
     elif critical >= VERDICT_HIGH and any(name in roster_names for name in AUTEUR_NAMES):
         ott_platform = "Netflix"
