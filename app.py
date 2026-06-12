@@ -1,164 +1,391 @@
+import random
 import streamlit as st
-import pandas as pd
-import altair as alt
-import base64
-import os
-import numpy as np
 
-# 1. PAGE CONFIG & CSS
-st.set_page_config(page_title="CricValue | Pro Edition", layout="wide", page_icon="🏏")
+st.set_page_config(
+    page_title="Box Office 100: The Ultimate Indian Cinema Challenge",
+    page_icon="🎬",
+    layout="wide",
+)
 
-st.markdown("""
-<style>
-    .stApp { background-color: #0E1117; }
-    .hero-card { background: linear-gradient(145deg, #1e2130, #161822); border-radius: 20px; padding: 20px; text-align: center; border: 1px solid #444; box-shadow: 0 10px 20px rgba(0,0,0,0.4); margin-bottom: 20px; }
-    .player-name { color: white; margin: 10px 0; font-size: 1.5rem; font-weight: 700; }
-    .price-tag { color: #4CAF50; font-weight: 900; margin: 10px 0; font-size: 2rem; }
-    .role-badge { background-color: #333; color: #ccc; padding: 5px 15px; border-radius: 15px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
-    .stat-box { background-color: #1a1c24; padding: 15px; border-radius: 10px; border: 1px solid #333; text-align: center; margin-bottom: 10px; }
-    .stat-label { color: #888; font-size: 0.8rem; text-transform: uppercase; }
-    .stat-val { color: #fff; font-size: 1.2rem; font-weight: bold; }
-</style>
-""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <style>
+    .stApp {background: radial-gradient(circle at top, #1f2538 0%, #0f111a 45%, #090b12 100%);} 
+    .hero {
+        border: 1px solid #3b435d; border-radius: 16px; padding: 1rem 1.25rem;
+        background: linear-gradient(145deg, rgba(48,58,91,0.35), rgba(24,27,40,0.8));
+    }
+    .slot {
+        border: 2px dashed #5b6074; border-radius: 12px; padding: 0.85rem; margin-bottom: 0.6rem;
+        background: rgba(255,255,255,0.03);
+    }
+    .slot.locked {border-style: solid; border-color: #2ea043; background: rgba(46,160,67,0.1);} 
+    .slot-role {font-size: 0.9rem; color: #99a2be; text-transform: uppercase; letter-spacing: 0.08em;}
+    .slot-name {font-weight: 700; color: #f4f7ff; margin-top: 0.2rem;}
+    .slot-origin {font-size: 0.8rem; color: #a9b4d0;}
+    .scorebox {
+        border-radius: 12px; padding: 0.8rem; text-align: center; background: rgba(255,255,255,0.05);
+        border: 1px solid #40475e;
+    }
+    .verdict {
+        border-left: 5px solid #f2c94c; border-radius: 10px; padding: 0.8rem 1rem;
+        background: rgba(242,201,76,0.12); font-weight: 600;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-# 2. IMAGE ASSETS ENGINE
-ONLINE_LOGOS = {
-    'CSK': 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2b/Chennai_Super_Kings_Logo.svg/1200px-Chennai_Super_Kings_Logo.svg.png',
-    'MI': 'https://upload.wikimedia.org/wikipedia/en/thumb/c/cd/Mumbai_Indians_Logo.svg/1200px-Mumbai_Indians_Logo.svg.png',
-    'RCB': 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2a/Royal_Challengers_Bangalore_2020.svg/1200px-Royal_Challengers_Bangalore_2020.svg.png',
-    'KKR': 'https://upload.wikimedia.org/wikipedia/en/thumb/4/4c/Kolkata_Knight_Riders_Logo.svg/1200px-Kolkata_Knight_Riders_Logo.svg.png',
-    'SRH': 'https://upload.wikimedia.org/wikipedia/en/thumb/8/81/Sunrisers_Hyderabad.svg/300px-Sunrisers_Hyderabad.svg.png',
-    'RR': 'https://upload.wikimedia.org/wikipedia/en/thumb/6/60/Rajasthan_Royals_Logo.svg/1200px-Rajasthan_Royals_Logo.svg.png',
-    'DC': 'https://upload.wikimedia.org/wikipedia/en/thumb/2/2f/Delhi_Capitals.svg/1200px-Delhi_Capitals.svg.png',
-    'PBKS': 'https://upload.wikimedia.org/wikipedia/en/thumb/d/d4/Punjab_Kings_Logo.svg/1200px-Punjab_Kings_Logo.svg.png',
-    'LSG': 'https://upload.wikimedia.org/wikipedia/en/a/a9/Lucknow_Super_Giants_IPL_Logo.svg',
-    'GT': 'https://upload.wikimedia.org/wikipedia/en/thumb/0/09/Gujarat_Titans_Logo.svg/1200px-Gujarat_Titans_Logo.svg.png',
-    'Free Agent': 'https://cdn-icons-png.flaticon.com/512/103/103206.png'
+MOVIES = [
+    {
+        "title": "Sholay",
+        "year": 1975,
+        "roles": {
+            "Director": "Ramesh Sippy",
+            "Lead Male": "Amitabh Bachchan",
+            "Lead Female": "Hema Malini",
+            "Music Director": "R.D. Burman",
+            "Writer": "Salim-Javed",
+        },
+    },
+    {
+        "title": "Dilwale Dulhania Le Jayenge",
+        "year": 1995,
+        "roles": {
+            "Director": "Aditya Chopra",
+            "Lead Male": "Shah Rukh Khan",
+            "Lead Female": "Kajol",
+            "Music Director": "Jatin-Lalit",
+            "Writer": "Aditya Chopra",
+        },
+    },
+    {
+        "title": "Lagaan",
+        "year": 2001,
+        "roles": {
+            "Director": "Ashutosh Gowariker",
+            "Lead Male": "Aamir Khan",
+            "Lead Female": "Gracy Singh",
+            "Music Director": "A.R. Rahman",
+            "Writer": "Ashutosh Gowariker",
+        },
+    },
+    {
+        "title": "3 Idiots",
+        "year": 2009,
+        "roles": {
+            "Director": "Rajkumar Hirani",
+            "Lead Male": "Aamir Khan",
+            "Lead Female": "Kareena Kapoor",
+            "Music Director": "Shantanu Moitra",
+            "Writer": "Abhijat Joshi",
+        },
+    },
+    {
+        "title": "Rockstar",
+        "year": 2011,
+        "roles": {
+            "Director": "Imtiaz Ali",
+            "Lead Male": "Ranbir Kapoor",
+            "Lead Female": "Nargis Fakhri",
+            "Music Director": "A.R. Rahman",
+            "Writer": "Imtiaz Ali",
+        },
+    },
+    {
+        "title": "Baahubali: The Conclusion",
+        "year": 2017,
+        "roles": {
+            "Director": "S.S. Rajamouli",
+            "Lead Male": "Prabhas",
+            "Lead Female": "Anushka Shetty",
+            "Music Director": "M.M. Keeravani",
+            "Writer": "K.V. Vijayendra Prasad",
+        },
+    },
+    {
+        "title": "Dangal",
+        "year": 2016,
+        "roles": {
+            "Director": "Nitesh Tiwari",
+            "Lead Male": "Aamir Khan",
+            "Lead Female": "Fatima Sana Shaikh",
+            "Music Director": "Pritam",
+            "Writer": "Nitesh Tiwari",
+        },
+    },
+    {
+        "title": "RRR",
+        "year": 2022,
+        "roles": {
+            "Director": "S.S. Rajamouli",
+            "Lead Male": "Jr. NTR & Ram Charan",
+            "Lead Female": "Alia Bhatt",
+            "Music Director": "M.M. Keeravani",
+            "Writer": "K.V. Vijayendra Prasad",
+        },
+    },
+    {
+        "title": "Jawan",
+        "year": 2023,
+        "roles": {
+            "Director": "Atlee",
+            "Lead Male": "Shah Rukh Khan",
+            "Lead Female": "Nayanthara",
+            "Music Director": "Anirudh Ravichander",
+            "Writer": "Atlee",
+        },
+    },
+    {
+        "title": "Gangubai Kathiawadi",
+        "year": 2022,
+        "roles": {
+            "Director": "Sanjay Leela Bhansali",
+            "Lead Male": "Shantanu Maheshwari",
+            "Lead Female": "Alia Bhatt",
+            "Music Director": "Sanjay Leela Bhansali",
+            "Writer": "Utkarshini Vashishtha",
+        },
+    },
+    {
+        "title": "KGF: Chapter 2",
+        "year": 2022,
+        "roles": {
+            "Director": "Prashanth Neel",
+            "Lead Male": "Yash",
+            "Lead Female": "Srinidhi Shetty",
+            "Music Director": "Ravi Basrur",
+            "Writer": "Prashanth Neel",
+        },
+    },
+]
+
+ROLE_WEIGHTS = {
+    "Director": {
+        "S.S. Rajamouli": (25, 23),
+        "Aditya Chopra": (20, 19),
+        "Rajkumar Hirani": (23, 18),
+        "Ramesh Sippy": (22, 17),
+        "Ashutosh Gowariker": (21, 17),
+        "Nitesh Tiwari": (20, 17),
+        "Atlee": (16, 22),
+        "Sanjay Leela Bhansali": (21, 15),
+        "Prashanth Neel": (15, 22),
+        "Imtiaz Ali": (18, 14),
+    },
+    "Lead Male": {
+        "Aamir Khan": (21, 19),
+        "Shah Rukh Khan": (19, 23),
+        "Amitabh Bachchan": (20, 18),
+        "Prabhas": (15, 21),
+        "Jr. NTR & Ram Charan": (18, 21),
+        "Ranbir Kapoor": (17, 14),
+        "Yash": (14, 21),
+        "Shantanu Maheshwari": (12, 11),
+    },
+    "Lead Female": {
+        "Alia Bhatt": (20, 18),
+        "Kajol": (19, 17),
+        "Kareena Kapoor": (17, 15),
+        "Anushka Shetty": (16, 18),
+        "Hema Malini": (18, 16),
+        "Nayanthara": (15, 18),
+        "Fatima Sana Shaikh": (14, 14),
+        "Gracy Singh": (13, 12),
+        "Srinidhi Shetty": (12, 15),
+        "Nargis Fakhri": (11, 11),
+    },
+    "Music Director": {
+        "A.R. Rahman": (20, 21),
+        "M.M. Keeravani": (17, 20),
+        "R.D. Burman": (20, 16),
+        "Anirudh Ravichander": (15, 19),
+        "Pritam": (14, 18),
+        "Jatin-Lalit": (14, 16),
+        "Sanjay Leela Bhansali": (15, 13),
+        "Ravi Basrur": (12, 17),
+        "Shantanu Moitra": (15, 13),
+    },
+    "Writer": {
+        "K.V. Vijayendra Prasad": (22, 19),
+        "Salim-Javed": (22, 17),
+        "Aditya Chopra": (17, 15),
+        "Ashutosh Gowariker": (18, 14),
+        "Abhijat Joshi": (17, 14),
+        "Imtiaz Ali": (16, 12),
+        "Nitesh Tiwari": (18, 14),
+        "Atlee": (13, 17),
+        "Utkarshini Vashishtha": (15, 12),
+        "Prashanth Neel": (13, 18),
+    },
 }
 
-def get_team_logo(team_code):
-    return ONLINE_LOGOS.get(team_code, ONLINE_LOGOS['Free Agent'])
+ROLES = ["Director", "Lead Male", "Lead Female", "Music Director", "Writer"]
 
-# 3. DATA LOADING
-@st.cache_data
-def load_raw_data():
-    csv_file = 'ipl_ball_by_ball_2008_2025.csv'
-    zip_file = 'data.zip'
-    try:
-        if os.path.exists(csv_file): df = pd.read_csv(csv_file)
-        elif os.path.exists(zip_file): df = pd.read_csv(zip_file, compression='zip')
-        else: return pd.DataFrame()
-        df['date'] = pd.to_datetime(df['date'], errors='coerce')
-        df['year'] = df['date'].dt.year
-        return df
-    except: return pd.DataFrame()
 
-# 4. VALUATION LOGIC (Optimized for Profiles)
-@st.cache_data
-def get_season_stats(df, player_name):
-    # Batting per season
-    bat_s = df[df['batter'] == player_name].groupby('year').agg(
-        runs=('runs_off_bat', 'sum'),
-        balls=('ball', 'count')
-    ).reset_index()
-    bat_s['sr'] = (bat_s['runs'] / bat_s['balls'].replace(0, 1)) * 100
-    bat_s['points'] = bat_s['runs'] * ((bat_s['sr']/100)**2) / 1.25
-    
-    # Bowling per season
-    bowl_s = df[df['bowler'] == player_name].groupby('year').agg(
-        wkts=('is_wicket', 'sum'),
-        runs_conceded=('total_runs', 'sum'),
-        balls_bowled=('ball', 'count')
-    ).reset_index()
-    bowl_s['eco'] = (bowl_s['runs_conceded'] / bowl_s['balls_bowled'].replace(0, 1)) * 6
-    bowl_s['points'] = bowl_s.apply(lambda x: (x['wkts'] * ((9.0/max(4, x['eco']))**2) * 35) if x['wkts'] > 0 else 0, axis=1)
-    
-    return bat_s, bowl_s
+def random_movie():
+    return random.choice(MOVIES)
 
-@st.cache_data
-def calculate_vals(df, selected_year=None):
-    if selected_year:
-        df_subset = df[df['year'] == selected_year]
-        latest_year = selected_year
+
+def init_state():
+    if "roster" not in st.session_state:
+        st.session_state.roster = {role: None for role in ROLES}
+    if "current_movie" not in st.session_state:
+        st.session_state.current_movie = random_movie()
+    if "result" not in st.session_state:
+        st.session_state.result = None
+
+
+def draft(role: str):
+    if st.session_state.roster[role] is not None:
+        return
+    movie = st.session_state.current_movie
+    st.session_state.roster[role] = {
+        "name": movie["roles"][role],
+        "movie": movie["title"],
+        "year": movie["year"],
+    }
+    st.session_state.current_movie = random_movie()
+    st.session_state.result = None
+
+
+def compute_scores(roster: dict):
+    critical = 0
+    box_office = 0
+
+    for role, pick in roster.items():
+        person = pick["name"]
+        c_score, b_score = ROLE_WEIGHTS.get(role, {}).get(person, (10, 10))
+        critical += c_score
+        box_office += b_score
+
+    director = roster["Director"]["name"]
+    lead_male = roster["Lead Male"]["name"]
+    writer = roster["Writer"]["name"]
+
+    if lead_male == "Shah Rukh Khan" and director == "Aditya Chopra":
+        critical += 15
+        box_office += 15
+
+    if director == "S.S. Rajamouli" and writer == "K.V. Vijayendra Prasad":
+        critical += 15
+        box_office += 15
+
+    critical += random.randint(-5, 5)
+    box_office += random.randint(-5, 5)
+
+    critical = max(0, min(100, critical))
+    box_office = max(0, min(100, box_office))
+
+    if critical >= 95 and box_office >= 95:
+        verdict = "All-Time Historic Blockbuster 🏆"
+    elif critical >= 80 and box_office < 65:
+        verdict = "Cult Classic Masterpiece 🎬"
+    elif critical < 65 and box_office >= 80:
+        verdict = "Commercial Masala Hit 💥"
+    elif critical < 50 and box_office < 50:
+        verdict = "Disastrous Box Office Dud 📉"
     else:
-        df_subset = df[df['year'] >= 2024]
-        latest_year = 2025
+        verdict = "Strong Theatrical Performer 🍿"
 
-    # Core Logic
-    df_sorted = df.sort_values('date')
-    last_team = pd.concat([df_sorted.groupby('batter')['batting_team'].last(), df_sorted.groupby('bowler')['bowling_team'].last()]).groupby(level=0).last()
-    
-    bat = df_subset.groupby('batter').agg(runs=('runs_off_bat', 'sum'), balls=('ball', 'count')).reset_index()
-    bat.columns = ['Player', 'bat_runs', 'bat_balls']; bat['sr'] = (bat['bat_runs'] / bat['bat_balls'].replace(0, 1)) * 100
-    bat['bat_points'] = bat['bat_runs'] * ((bat['sr']/100)**2) / 1.25
+    return critical, box_office, verdict
 
-    bowl = df_subset.groupby('bowler').agg(wkts=('is_wicket', 'sum'), runs=('total_runs', 'sum'), balls=('ball', 'count')).reset_index()
-    bowl.columns = ['Player', 'bowl_wkts', 'bowl_runs', 'bowl_balls']; bowl['eco'] = (bowl['bowl_runs'] / bowl['bowl_balls'].replace(0, 1)) * 6
-    bowl['bowl_points'] = bowl.apply(lambda x: (x['bowl_wkts'] * ((9.0/max(4, x['eco']))**2) * 35) if x['bowl_wkts'] > 0 else 0, axis=1)
 
-    merged = pd.merge(bat, bowl, on='Player', how='outer').fillna(0)
-    merged['Team_Code'] = merged['Player'].map(last_team).map({
-        'Chennai Super Kings': 'CSK', 'Mumbai Indians': 'MI', 'Royal Challengers Bangalore': 'RCB', 'Royal Challengers Bengaluru': 'RCB',
-        'Kolkata Knight Riders': 'KKR', 'Sunrisers Hyderabad': 'SRH', 'Rajasthan Royals': 'RR', 'Delhi Capitals': 'DC', 'Punjab Kings': 'PBKS',
-        'Lucknow Super Giants': 'LSG', 'Gujarat Titans': 'GT'
-    }).fillna("Free Agent")
-    
-    merged['perf_points'] = merged.apply(lambda x: max(x['bat_points'], x['bowl_points']) + (min(x['bat_points'], x['bowl_points']) * 0.4), axis=1)
-    merged['rank'] = merged['perf_points'].rank(ascending=False)
-    merged['Market_Value'] = merged['rank'].apply(lambda r: min(35.0, 35.0 / (1 + 0.045 * r)) if r > 3 else 30.0 + (3-r))
-    merged['Role'] = merged.apply(lambda x: "All-Rounder" if x['bat_points'] > 50 and x['bowl_points'] > 50 else ("Batter" if x['bat_points'] > x['bowl_points'] else "Bowler"), axis=1)
-    
-    return merged.sort_values('Market_Value', ascending=False)
+def reset_game():
+    st.session_state.roster = {role: None for role in ROLES}
+    st.session_state.current_movie = random_movie()
+    st.session_state.result = None
 
-# 5. UI APP
-df_raw = load_raw_data()
-if df_raw.empty: st.stop()
 
-with st.sidebar:
-    st.title("CricValue Pro")
-    mode = st.radio("Mode", ["Projected Value", "Historical Season"])
-    selected_year = st.selectbox("Season", sorted(df_raw['year'].unique(), reverse=True)) if mode == "Historical Season" else None
+init_state()
 
-vals = calculate_vals(df_raw, selected_year)
+st.markdown(
+    """
+    <div class='hero'>
+        <h1 style='margin-bottom:0.2rem;'>Box Office 100</h1>
+        <p style='margin-top:0;color:#b8c2dd;'>Draft a 5-member film crew to hit a perfect 100/100 in Critical Acclaim and Box Office Collection.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-# TABS
-tab1, tab2, tab3 = st.tabs(["📋 Scouting", "📈 Clusters", "🔎 Career Profile"])
+left, right = st.columns([1.1, 1.6], gap="large")
 
-with tab1:
-    st.dataframe(vals.head(50), use_container_width=True, hide_index=True)
+with left:
+    st.subheader("Your Crew Roster")
+    for role in ROLES:
+        pick = st.session_state.roster[role]
+        if pick is None:
+            st.markdown(
+                f"""
+                <div class='slot'>
+                    <div class='slot-role'>{role}</div>
+                    <div class='slot-name' style='color:#7e879f;'>[EMPTY]</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""
+                <div class='slot locked'>
+                    <div class='slot-role'>{role}</div>
+                    <div class='slot-name'>{pick['name']}</div>
+                    <div class='slot-origin'>Locked from {pick['movie']} ({pick['year']})</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-with tab3:
-    col_sel, _ = st.columns([1, 2])
-    p_name = col_sel.selectbox("Select Player", sorted(df_raw['batter'].unique()))
-    
-    if p_name:
-        bat_s, bowl_s = get_season_stats(df_raw, p_name)
-        
-        # Profile Header
-        st.markdown(f"## {p_name}")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.markdown(f"<div class='stat-box'><div class='stat-label'>Career Runs</div><div class='stat-val'>{bat_s['runs'].sum()}</div></div>", unsafe_allow_html=True)
-        c2.markdown(f"<div class='stat-box'><div class='stat-label'>Career Wickets</div><div class='stat-val'>{bowl_s['wkts'].sum()}</div></div>", unsafe_allow_html=True)
-        c3.markdown(f"<div class='stat-box'><div class='stat-label'>Avg SR</div><div class='stat-val'>{bat_s['sr'].mean():.1f}</div></div>", unsafe_allow_html=True)
-        c4.markdown(f"<div class='stat-box'><div class='stat-label'>Best Season</div><div class='stat-val'>{int(bat_s.loc[bat_s['points'].idxmax(), 'year']) if not bat_s.empty else 'N/A'}</div></div>", unsafe_allow_html=True)
+    all_filled = all(st.session_state.roster[r] is not None for r in ROLES)
 
-        # Career Chart
-        st.markdown("### Career Impact Trajectory")
-        chart_data = pd.merge(bat_s[['year', 'points']], bowl_s[['year', 'points']], on='year', how='outer', suffixes=('_bat', '_bowl')).fillna(0)
-        chart_data['Total Impact'] = chart_data['points_bat'] + chart_data['points_bowl']
-        
-        line_chart = alt.Chart(chart_data).mark_line(point=True, color='#4CAF50').encode(
-            x=alt.X('year:O', title='Season'),
-            y=alt.Y('Total Impact:Q', title='Impact Points'),
-            tooltip=['year', 'Total Impact']
-        ).properties(height=300)
-        st.altair_chart(line_chart, use_container_width=True)
-        
-        # Season Breakdown Table
-        st.markdown("### Season-by-Season Breakdown")
-        breakdown = pd.merge(
-            bat_s.rename(columns={'runs': 'Runs', 'sr': 'S/R'}),
-            bowl_s.rename(columns={'wkts': 'Wickets', 'eco': 'Economy'}),
-            on='year', how='outer'
-        ).fillna(0)[['year', 'Runs', 'S/R', 'Wickets', 'Economy']].sort_values('year', ascending=False)
-        st.table(breakdown)
+    if st.button("🎞️ Release Movie", use_container_width=True, disabled=not all_filled, type="primary"):
+        c_score, b_score, verdict = compute_scores(st.session_state.roster)
+        st.session_state.result = {
+            "critical": c_score,
+            "box_office": b_score,
+            "verdict": verdict,
+        }
+
+    if st.session_state.result:
+        result = st.session_state.result
+        a, b = st.columns(2)
+        a.markdown(
+            f"<div class='scorebox'><div style='color:#9fa8c6;'>Critical Acclaim</div><div style='font-size:2rem;font-weight:800;'>{result['critical']}/100</div></div>",
+            unsafe_allow_html=True,
+        )
+        b.markdown(
+            f"<div class='scorebox'><div style='color:#9fa8c6;'>Box Office Collection</div><div style='font-size:2rem;font-weight:800;'>{result['box_office']}/100</div></div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown(f"<div class='verdict'>Final Verdict: {result['verdict']}</div>", unsafe_allow_html=True)
+
+        if st.button("🔁 Try For Another Hit", use_container_width=True):
+            reset_game()
+            st.rerun()
+
+with right:
+    movie = st.session_state.current_movie
+    st.subheader("Current Roll")
+    st.markdown(
+        f"""
+        <div class='hero' style='margin-top:0.3rem;'>
+            <h2 style='margin-bottom:0.2rem;'>{movie['title']}</h2>
+            <p style='margin-top:0;color:#b8c2dd;'>Release Year: {movie['year']}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("### Draft From This Movie")
+    for role in ROLES:
+        person = movie["roles"][role]
+        locked = st.session_state.roster[role] is not None
+        st.button(
+            f"Draft {person} as {role}",
+            use_container_width=True,
+            disabled=locked,
+            key=f"draft_{role}_{movie['title']}_{movie['year']}",
+            on_click=draft,
+            args=(role,),
+        )
